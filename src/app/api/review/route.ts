@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-  console.log('API route /api/review received request. (Server-side)');
+  // console.log('API route /api/review received request. (Server-side)');
   try {
     const { code, prompt } = await req.json();
 
@@ -29,12 +29,15 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    console.log('Server: Received response from GPT OSS:', data);
     const reviewedCode = data.response || data.text || JSON.stringify(data, null, 2);
 
     return NextResponse.json({ reviewedCode });
-  } catch (error: any) {
-    console.error('Server: Error in /api/review route (top-level catch):', error);
-    return NextResponse.json({ error: `Failed to review code: ${error.message}` }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('Server: Error in /api/review route:', error);
+      return NextResponse.json({ error: `Failed to review code: ${error.message}` }, { status: 500 });
+    } else {
+      return NextResponse.json({ error: `Failed to review code: An unknown error occurred` }, { status: 500 });
+    }
   }
 }

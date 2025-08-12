@@ -17,6 +17,7 @@ import 'ace-builds/src-noconflict/ext-language_tools';
 
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { inherits } from 'util';
 
 
 const DEFAULT_PROMPTS = [
@@ -110,10 +111,10 @@ export default function Home() {
       }
 
       const data = await response.json(); // Expecting JSON response
-      console.log('Client: Received data from API route:', data); // Added log
-      console.log('Client: reviewedCode from data:', data.reviewedCode); // Added log
+      // console.log('Client: Received data from API route:', data); // Added log
+      // console.log('Client: reviewedCode from data:', data.reviewedCode); // Added log
       setReviewedCode(data.reviewedCode);
-      console.log('Client: reviewedCode state after setReviewedCode:', reviewedCode); // Added log (Note: this might log old value due to closure)
+      // console.log('Client: reviewedCode state after setReviewedCode:', reviewedCode); // Added log (Note: this might log old value due to closure)
 
     } catch (error: any) {
       console.error('Client: Error during review:', error); // Added log
@@ -129,16 +130,16 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex w-screen h-screen bg-gray-900 text-white">
       <aside className="w-64 bg-gray-800 p-4">
+        <h1 className="text-2xl font-bold mb-4">Code Review</h1>
         <h2 className="text-lg font-semibold mb-4">Prompts</h2>
         <ul>
           {prompts.map((prompt) => (
             <li
               key={prompt}
-              className={`cursor-pointer p-2 rounded ${
-                selectedPrompt === prompt ? 'bg-gray-600' : ''
-              }`}
+              className={`cursor-pointer p-2 rounded ${selectedPrompt === prompt ? 'bg-gray-600' : ''
+                }`}
               onClick={() => setSelectedPrompt(prompt)}
             >
               {prompt}
@@ -182,12 +183,11 @@ export default function Home() {
           {isLoading ? 'Reviewing...' : 'Review Code'}
         </button>
       </aside>
-      <main className="flex-1 flex flex-col p-4">
-        <h1 className="text-2xl font-bold mb-4">Code Review</h1>
-        <div className="flex-1 flex gap-4">
-          <div className="w-1/2 flex flex-col">
+      <main className="flex-1 flex flex-col p-4 w-full h-full">
+        <div className="flex-1 flex gap-4 w-full h-full">
+          <div className="w-1/2 flex flex-col h-full">
             <h2 className="text-lg font-semibold mb-2">Your Code</h2>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-scroll-hidden">
               <AceEditor
                 mode={selectedLanguage}
                 theme="monokai"
@@ -207,26 +207,32 @@ export default function Home() {
               />
             </div>
           </div>
-          <div className="w-1/2 flex flex-col">
+          <div className="w-1/2 flex flex-col h-full">
             <h2 className="text-lg font-semibold mb-2">Reviewed Code</h2>
-            <div className="flex-1 relative overflow-y-auto">
+            <div className="flex-1 relative h-full w-full overflow-scroll bg-gray-800 rounded border border-gray-700">
               <button
                 className="absolute top-0 right-0 mt-2 mr-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded text-xs z-10"
                 onClick={handleCopy}
               >
                 Copy
               </button>
-              <div className="w-full h-full bg-gray-800 rounded border border-gray-700">
-                {isLoading ? (
-                  <p className="p-4">Loading...</p>
-                ) : error ? (
-                  <p className="p-4 text-red-500">{error}</p>
-                ) : (
-                  <SyntaxHighlighter language={languageOptions.find(opt => opt.aceMode === selectedLanguage)?.syntaxHighlighterLang || 'javascript'} style={vscDarkPlus} customStyle={{height: "100%", width: "100%", backgroundColor: "transparent", padding: "0 !important", margin: "0 !important"}}>
-                    {reviewedCode}
-                  </SyntaxHighlighter>
-                )}
-              </div>
+              {isLoading ? (
+                <p className="p-4">Loading...</p>
+              ) : error ? (
+                <p className="p-4 text-red-500">{error}</p>
+              ) : (
+                <SyntaxHighlighter
+                  language={languageOptions.find(opt => opt.aceMode === selectedLanguage)?.syntaxHighlighterLang || 'javascript'}
+                  style={vscDarkPlus}
+                  customStyle={{
+                    backgroundColor: "transparent",
+                    margin: "0 !important",
+                    padding: "0 !important",
+                    overflow: "unset"
+                  }}>
+                  {reviewedCode}
+                </SyntaxHighlighter>
+              )}
             </div>
           </div>
         </div>
