@@ -293,7 +293,7 @@ export default function Home() {
                 <p className="p-4 text-red-500">{error}</p>
               ) : (
                 <SyntaxHighlighter
-                  language='markdown'
+                  language={languageOptions.find(opt => opt.aceMode === selectedLanguage)?.syntaxHighlighterLang || 'javascript'}
                   style={vscDarkPlus}
                   customStyle={{
                     backgroundColor: "transparent",

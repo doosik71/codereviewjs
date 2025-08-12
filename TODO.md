@@ -2,9 +2,7 @@
 
 ## Remaining Tasks
 
-- [ ] Change the title of the page to "Code Review".
-- [ ] Improve the speed of editing new prompts.
-- [ ] Users should be able to modify or delete existing prompts.
+- [ ] Build windows app.
 
 ## Completed Tasks
 
@@ -41,3 +39,6 @@
 - [x] Provide default prompts for "Code Refactoring", "Bug Detection", and "Performance Improvement".
 - [x] Save user-defined prompts to local storage.
 - [x] Support streaming output.
+- [x] Change the title of the page to "Code Review".
+- [x] Improve the speed of editing new prompts.
+- [x] Users should be able to modify or delete existing prompts.

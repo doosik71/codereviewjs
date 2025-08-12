@@ -1,74 +1,77 @@
 import { NextRequest } from 'next/server';
 
+interface ReviewRequest {
+  code: string;
+  prompt: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { code, prompt } = await req.json();
+    const { code, prompt } = await req.json() as ReviewRequest;
 
-    const ollamaApiUrl = process.env.OLLAMA_API_URL || 'http://127.0.0.1:11434';
-    const gptOssUrl = `${ollamaApiUrl}/api/generate`;
+    const baseUrl = process.env.OLLAMA_API_URL ?? 'http://127.0.0.1:11434';
+    const url = new URL('api/generate', baseUrl);
 
-    const ollamaResponse = await fetch(gptOssUrl, {
+    const payload = {
+      model: 'gpt-oss:20b',
+      prompt: `${prompt}:\n\n---CODE---\n${code}\n---CODE---\n\nProvide ONLY the refactored code without any explanations or conversational text. Do NOT include phrases like "Here is the refactored code:".`,
+      stream: true,
+    };
+
+    const ollamaRes = await fetch(url.toString(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-oss:20b',
-        prompt: `Review the following code for ${prompt}:\n\n${code}`,
-        stream: true, // Enable streaming
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
 
-    if (!ollamaResponse.ok) {
-      const errorText = await ollamaResponse.text();
-      console.error('Server: GPT OSS API returned an error:', ollamaResponse.status, errorText);
-      throw new Error(`GPT OSS API error: ${ollamaResponse.status} - ${errorText}`);
+    if (!ollamaRes.ok) {
+      const errMsg = await ollamaRes.text();
+      console.error('GPT OSS API error', ollamaRes.status, errMsg);
+      throw new Error(`GPT OSS API error: ${ollamaRes.status} - ${errMsg}`);
     }
 
-    // Create a ReadableStream to send the response to the client
+    const reader = ollamaRes.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
-        if (!ollamaResponse.body) {
-          controller.close();
-          return;
-        }
-        const reader = ollamaResponse.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          const chunk = decoder.decode(value, { stream: true });
-          // The response from Ollama is a stream of JSON objects, separated by newlines.
-          const jsonObjects = chunk.split('\n').filter(Boolean);
-          for (const jsonObj of jsonObjects) {
-            try {
-              const parsed = JSON.parse(jsonObj);
-              if (parsed.response) {
-                // console.log(parsed.response);
-                controller.enqueue(new TextEncoder().encode(parsed.response));
+        let leftover = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = (leftover + chunk).split('\n');
+            leftover = lines.pop() ?? '';
+            for (const line of lines) {
+              if (!line) continue;
+              try {
+                const parsed = JSON.parse(line);
+                if (parsed.response) {
+                  controller.enqueue(new TextEncoder().encode(parsed.response));
+                }
+              } catch (e) {
+                console.error('JSON parse error', e);
               }
-            } catch (e) {
-              console.error('Error parsing JSON chunk:', e);
             }
           }
+        } finally {
+          controller.close();
         }
-        controller.close();
       },
     });
 
     return new Response(stream, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
-
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error('Server: Error in /api/review route:', error);
-      return new Response(JSON.stringify({ error: `Failed to review code: ${error.message}` }), { status: 500 });
-    } else {
-      return new Response(JSON.stringify({ error: `Failed to review code: An unknown error occurred` }), { status: 500 });
-    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Review API error', error);
+    return new Response(
+      JSON.stringify({ error: `Failed to review code: ${msg}` }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
