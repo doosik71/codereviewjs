@@ -54,6 +54,8 @@ To get a local copy up and running follow these simple steps.
 
 Open [http://localhost:3010](http://localhost:3010) with your browser to see the result.
 
+![Screen shot](./images/screen.png)
+
 ### Building for Windows
 
 To build a standalone Windows application using Electron:
