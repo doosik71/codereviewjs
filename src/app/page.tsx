@@ -17,7 +17,6 @@ import 'ace-builds/src-noconflict/ext-language_tools';
 
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { inherits } from 'util';
 
 
 const DEFAULT_PROMPTS = [
@@ -36,6 +35,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('javascript'); // Initial default
+  const [editingPromptIndex, setEditingPromptIndex] = useState<number | null>(null);
 
   const languageOptions = [
     { name: 'Java', aceMode: 'java', syntaxHighlighterLang: 'java' },
@@ -69,9 +69,15 @@ export default function Home() {
 
   // Save prompts to local storage whenever prompts state changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && prompts.length > 0) {
-      localStorage.setItem('codeReviewPrompts', JSON.stringify(prompts));
-    }
+    const handler = setTimeout(() => {
+      if (typeof window !== 'undefined' && prompts.length > 0) {
+        localStorage.setItem('codeReviewPrompts', JSON.stringify(prompts));
+      }
+    }, 500); // Debounce with 500ms delay
+
+    return () => {
+      clearTimeout(handler);
+    };
   }, [prompts]);
 
   // Save selected language to local storage whenever selectedLanguage state changes
@@ -82,20 +88,41 @@ export default function Home() {
   }, [selectedLanguage]);
 
 
-  const handleAddPrompt = () => {
-    if (customPrompt && !prompts.includes(customPrompt)) {
-      const updatedPrompts = [...prompts, customPrompt];
+  const handleDeletePrompt = (index: number) => {
+    const updatedPrompts = [...prompts];
+    updatedPrompts.splice(index, 1);
+    setPrompts(updatedPrompts);
+  };
+
+  const handleEditPrompt = (index: number) => {
+    setEditingPromptIndex(index);
+    setCustomPrompt(prompts[index]);
+  };
+
+  const handleAddOrUpdatePrompt = () => {
+    if (editingPromptIndex !== null) {
+      // Update existing prompt
+      const updatedPrompts = [...prompts];
+      updatedPrompts[editingPromptIndex] = customPrompt;
       setPrompts(updatedPrompts);
-      setSelectedPrompt(customPrompt);
+      setEditingPromptIndex(null);
       setCustomPrompt('');
+    } else {
+      // Add new prompt
+      if (customPrompt && !prompts.includes(customPrompt)) {
+        const updatedPrompts = [...prompts, customPrompt];
+        setPrompts(updatedPrompts);
+        setSelectedPrompt(customPrompt);
+        setCustomPrompt('');
+      }
     }
   };
 
   const handleReview = async () => {
     setIsLoading(true);
     setError(null);
-    setReviewedCode(''); // Clear previous review
-    console.log('Client: Starting review process...'); // Added log
+    setReviewedCode('');
+
     try {
       const response = await fetch('/api/review', {
         method: 'POST',
@@ -110,18 +137,30 @@ export default function Home() {
         throw new Error(`Failed to review code: ${errorData.error || response.statusText}`);
       }
 
-      const data = await response.json(); // Expecting JSON response
-      // console.log('Client: Received data from API route:', data); // Added log
-      // console.log('Client: reviewedCode from data:', data.reviewedCode); // Added log
-      setReviewedCode(data.reviewedCode);
-      // console.log('Client: reviewedCode state after setReviewedCode:', reviewedCode); // Added log (Note: this might log old value due to closure)
+      if (!response.body) {
+        throw new Error('Streaming response not available.');
+      }
 
-    } catch (error: any) {
-      console.error('Client: Error during review:', error); // Added log
-      setError(error.message);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        setReviewedCode((prev) => prev + chunk);
+      }
+
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     } finally {
       setIsLoading(false);
-      console.log('Client: Review process finished.'); // Added log
     }
   };
 
@@ -135,14 +174,37 @@ export default function Home() {
         <h1 className="text-2xl font-bold mb-4">Code Review</h1>
         <h2 className="text-lg font-semibold mb-4">Prompts</h2>
         <ul>
-          {prompts.map((prompt) => (
+          {prompts.map((prompt, index) => (
             <li
-              key={prompt}
-              className={`cursor-pointer p-2 rounded ${selectedPrompt === prompt ? 'bg-gray-600' : ''
-                }`}
-              onClick={() => setSelectedPrompt(prompt)}
+              key={index}
+              className="flex justify-between items-center p-2 rounded hover:bg-gray-700"
             >
-              {prompt}
+              <span
+                className={`cursor-pointer ${selectedPrompt === prompt ? 'text-blue-400' : ''}`}
+                onClick={() => setSelectedPrompt(prompt)}
+              >
+                {prompt}
+              </span>
+              <div className="flex flex-col gap-1">
+                <button
+                  className="text-xs bg-yellow-600 hover:bg-yellow-500 px-1 py-1 rounded-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditPrompt(index);
+                  }}
+                >
+                  ✏️
+                </button>
+                <button
+                  className="text-xs bg-red-600 hover:bg-red-500 px-1 py-1 rounded-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeletePrompt(index);
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -155,10 +217,21 @@ export default function Home() {
           />
           <button
             className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
-            onClick={handleAddPrompt}
+            onClick={handleAddOrUpdatePrompt}
           >
-            Add Prompt
+            {editingPromptIndex !== null ? 'Update Prompt' : 'Add Prompt'}
           </button>
+          {editingPromptIndex !== null && (
+            <button
+              className="w-full mt-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+              onClick={() => {
+                setEditingPromptIndex(null);
+                setCustomPrompt('');
+              }}
+            >
+              Cancel Edit
+            </button>
+          )}
         </div>
         <div className="mt-4">
           <label htmlFor="language-select" className="mr-2">Language:</label>
@@ -216,13 +289,11 @@ export default function Home() {
               >
                 Copy
               </button>
-              {isLoading ? (
-                <p className="p-4">Loading...</p>
-              ) : error ? (
+              {error ? (
                 <p className="p-4 text-red-500">{error}</p>
               ) : (
                 <SyntaxHighlighter
-                  language={languageOptions.find(opt => opt.aceMode === selectedLanguage)?.syntaxHighlighterLang || 'javascript'}
+                  language='markdown'
                   style={vscDarkPlus}
                   customStyle={{
                     backgroundColor: "transparent",

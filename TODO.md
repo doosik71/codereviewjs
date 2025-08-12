@@ -2,7 +2,9 @@
 
 ## Remaining Tasks
 
-- [ ] Support streaming output.
+- [ ] Change the title of the page to "Code Review".
+- [ ] Improve the speed of editing new prompts.
+- [ ] Users should be able to modify or delete existing prompts.
 
 ## Completed Tasks
 
@@ -38,3 +40,4 @@
 - [x] Add a feature to copy the reviewed code.
 - [x] Provide default prompts for "Code Refactoring", "Bug Detection", and "Performance Improvement".
 - [x] Save user-defined prompts to local storage.
+- [x] Support streaming output.
